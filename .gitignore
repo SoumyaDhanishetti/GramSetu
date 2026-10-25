@@ -1,5 +1,9 @@
 
 venv/
+.venv/
 __pycache__/
 *.py[cod]
 .env
+*.db
+backup_before_AI/
+app.zip

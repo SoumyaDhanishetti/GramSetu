@@ -1,0 +1,231 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rural Products | GramSetu</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font-family: Arial, sans-serif;
+            background: #f4f7f0; color: #243526;
+        }
+        header {
+            background: #245c3a; color: white;
+            padding: 22px 6%;
+        }
+        header a { color: white; margin-right: 18px; }
+        main { max-width: 1150px; margin: auto; padding: 24px; }
+        .intro, .form-card, .product-card {
+            background: white; padding: 22px;
+            border-radius: 14px; margin-bottom: 22px;
+            box-shadow: 0 3px 12px #0000000b;
+        }
+        .form-grid {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+        label { display: block; font-weight: bold; margin-bottom: 7px; }
+        input, select, textarea {
+            width: 100%; padding: 11px; border: 1px solid #cbd5c8;
+            border-radius: 8px; font: inherit; background: white;
+        }
+        textarea { min-height: 95px; resize: vertical; }
+        .full { grid-column: 1 / -1; }
+        button {
+            background: #245c3a; color: white; border: 0;
+            border-radius: 8px; padding: 13px 20px;
+            font-weight: bold; cursor: pointer;
+        }
+        button:hover { background: #19472b; }
+        .preview {
+            display: none; width: 180px; max-height: 180px;
+            object-fit: cover; border-radius: 10px; margin-top: 10px;
+        }
+        .products {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+        .product-card { padding: 0; overflow: hidden; }
+        .product-card img {
+            width: 100%; height: 210px; object-fit: cover;
+            background: #e8eee5;
+        }
+        .product-content { padding: 18px; }
+        .category {
+            display: inline-block; background: #e8f3e9;
+            color: #245c3a; padding: 5px 9px;
+            border-radius: 20px; font-size: 12px;
+        }
+        .price { font-size: 21px; font-weight: bold; color: #245c3a; }
+        .muted { color: #647164; font-size: 14px; }
+        .empty {
+            background: white; padding: 24px; border-radius: 12px;
+            text-align: center; grid-column: 1 / -1;
+        }
+        @media (max-width: 760px) {
+            .products { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 520px) {
+            .form-grid, .products { grid-template-columns: 1fr; }
+            main { padding: 14px; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>🧺 GramSetu Rural Products</h1>
+    <p>Discover and support products made by rural entrepreneurs.</p>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/marketplace">Farmer Marketplace</a>
+        <a href="/farming">Smart Farming</a>
+    </nav>
+</header>
+
+<main>
+    <section class="intro">
+        <h2>From our villages to your home</h2>
+        <p>Explore homemade foods, handmade crafts, clothing, jewellery,
+           agricultural products and more.</p>
+    </section>
+
+    <section class="form-card">
+        <h2>Publish a Product</h2>
+        <p class="muted">Add a clear photo, accurate price and useful product details
+           to help customers make informed choices.</p>
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="form-grid">
+                <div>
+                    <label for="seller">Seller / SHG name *</label>
+                    <input id="seller" name="seller" required
+                           placeholder="e.g. Lakshmi Self-Help Group">
+                </div>
+
+                <div>
+                    <label for="product">Product name *</label>
+                    <input id="product" name="product" required
+                           placeholder="e.g. Handmade bamboo basket">
+                </div>
+
+                <div>
+                    <label for="category">Category *</label>
+                    <select id="category" name="category" required>
+                        {% for category in categories %}
+                        <option value="{{ category }}">{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="price">Price in ₹ *</label>
+                    <input id="price" name="price" type="number"
+                           min="0.01" step="0.01" required placeholder="e.g. 250">
+                </div>
+
+                <div>
+                    <label for="price_unit">Price unit *</label>
+                    <select id="price_unit" name="price_unit" required>
+                        {% for unit in price_units %}
+                        <option value="{{ unit }}">{{ unit }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="location">Village / District *</label>
+                    <input id="location" name="location" required
+                           placeholder="e.g. Basar, Nirmal">
+                </div>
+
+                <div>
+                    <label for="contact">Contact details *</label>
+                    <input id="contact" name="contact" required
+                           placeholder="Phone number or preferred contact">
+                </div>
+
+                <div>
+                    <label for="image">Product photo (PNG, JPG, WEBP; max 8 MB)</label>
+                    <input id="image" name="image" type="file"
+                           accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                    <img id="preview" class="preview" alt="Selected product preview">
+                </div>
+
+                <div class="full">
+                    <label for="description">Description and customer details *</label>
+                    <textarea id="description" name="description" 
+                        placeholder="Describe material, size, quantity, ingredients if relevant, colours, packaging, availability and custom orders."></textarea>
+                </div>
+
+                <div class="full">
+                    <button type="submit">Publish Product</button>
+                </div>
+            </div>
+        </form>
+    </section>
+
+    <h2>Available Rural Products</h2>
+    <section class="products">
+        {% for item in products %}
+        <article class="product-card">
+            {% if item['image'] %}
+            <img src="{{ url_for('static', filename=item['image']) }}"
+                 alt="{{ item['product'] }}" loading="lazy">
+            {% else %}
+            <div style="height:210px;display:grid;place-items:center;background:#e8eee5;color:#526653">
+                <span>No photo uploaded</span>
+            </div>
+            {% endif %}
+
+            <div class="product-content">
+                <span class="category">{{ item['category'] }}</span>
+                <h3>{{ item['product'] }}</h3>
+                <p class="price">₹{{ "%.2f"|format(item['price']) }}
+                    <span class="muted">{{ item['price_unit'] }}</span>
+                </p>
+                <p>{{ item['description'] }}</p>
+                <p class="muted">Seller: {{ item['seller'] }}</p>
+                <p class="muted">Location: {{ item['location'] }}</p>
+                <p class="muted">Contact: {{ item['contact'] }}</p>
+            </div>
+        </article>
+        {% else %}
+        <div class="empty">
+            <h3>No products published yet</h3>
+            <p>Be the first rural entrepreneur to showcase a product.</p>
+        </div>
+        {% endfor %}
+    </section>
+</main>
+
+<script>
+    const imageInput = document.getElementById("image");
+    const preview = document.getElementById("preview");
+
+    imageInput.addEventListener("change", function () {
+        const file = this.files[0];
+
+        if (!file) {
+            preview.style.display = "none";
+            preview.removeAttribute("src");
+            return;
+        }
+
+        const allowed = ["image/png", "image/jpeg", "image/webp"];
+
+        if (!allowed.includes(file.type) || file.size > 8 * 1024 * 1024) {
+            alert("Choose a PNG, JPG or WEBP image smaller than 8 MB.");
+            this.value = "";
+            preview.style.display = "none";
+            preview.removeAttribute("src");
+            return;
+        }
+
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = "block";
+    });
+</script>
+</body>
+</html>

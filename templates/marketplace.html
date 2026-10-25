@@ -1,0 +1,283 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farmer Marketplace | GramSetu</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7f0;
+            color: #243526;
+        }
+
+        header {
+            background: #245c3a;
+            color: white;
+            padding: 24px 8%;
+        }
+
+        main {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .panel {
+            background: white;
+            padding: 24px;
+            margin-bottom: 24px;
+            border-radius: 12px;
+        }
+
+        form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 7px;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid #cbd5c9;
+            border-radius: 6px;
+            font: inherit;
+        }
+
+        button {
+            background: #245c3a;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+
+        button:hover { background: #19472c; }
+
+        .listing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 18px;
+        }
+
+        .listing {
+            border: 1px solid #dce5d9;
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .crop-image {
+            width: 100%;
+            height: 210px;
+            object-fit: cover;
+            display: block;
+            background: #e8eee5;
+        }
+
+        .listing-content { padding: 16px; }
+
+        .listing h3 {
+            margin-top: 0;
+            color: #245c3a;
+        }
+
+        .price {
+            font-size: 20px;
+            font-weight: bold;
+            color: #245c3a;
+        }
+
+        .hint {
+            color: #526354;
+            font-size: 14px;
+        }
+
+        a { color: #245c3a; }
+
+        .full-width { grid-column: 1 / -1; }
+
+        @media (max-width: 500px) {
+            .panel { padding: 16px; }
+            header { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>🌾 Farmer Marketplace</h1>
+    <p>Connecting farmers directly with potential buyers</p>
+    <a href="/" style="color:white">← Back to Home</a>
+</header>
+
+<main>
+    <section class="panel">
+        <h2>📸 Add a Crop Listing</h2>
+        <p class="hint">
+            Upload a real crop photo, set your price unit, and help buyers
+            understand exactly what you are selling.
+        </p>
+
+        <form action="{{ url_for('marketplace') }}"
+              method="POST" enctype="multipart/form-data">
+
+            <div>
+                <label for="farmer">Farmer name *</label>
+                <input id="farmer" name="farmer" required maxlength="80">
+            </div>
+
+            <div>
+                <label for="crop">Crop name *</label>
+                <input id="crop" name="crop" required maxlength="80"
+                       placeholder="e.g. Paddy, Cotton, Maize">
+            </div>
+
+            <div>
+               
+<label>Quantity</label>
+<div class="quantity-row">
+    <input
+        type="number"
+        name="quantity"
+        min="0.01"
+        step="any"
+        placeholder="Enter quantity"
+        required
+    >
+
+    <select name="quantity_unit" required>
+        <option value="kg">Kilograms (kg)</option>
+        <option value="g">Grams (g)</option>
+        <option value="pieces">Pieces</option>
+        <option value="dozens">Dozens</option>
+        <option value="bags">Bags</option>
+        <option value="quintals">Quintals</option>
+        <option value="tonnes">Tonnes</option>
+    </select>
+</div>
+
+            </div>
+
+            <div>
+                <label for="price_unit">Price applies to *</label>
+                <select id="price_unit" name="price_unit" required>
+                    <option value="per kg">Per kilogram (kg)</option>
+                    <option value="per quintal">Per quintal (100 kg)</option>
+                    <option value="per tonne">Per tonne (1000 kg)</option>
+                    <option value="per bag">Per bag</option>
+                    <option value="per dozen">Per dozen</option>
+                    <option value="per piece">Per piece</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="price">Expected price (₹) *</label>
+                <input id="price" name="price" type="number"
+                       min="0.01" step="0.01" required
+                       placeholder="e.g. 2500">
+                <p class="hint">Price for the selected unit above.</p>
+            </div>
+
+            <div>
+                <label for="location">Village / District *</label>
+                <input id="location" name="location" required maxlength="120"
+                       placeholder="e.g. Basar, Nirmal">
+            </div>
+
+            <div>
+                <label for="contact">Contact information *</label>
+                <input id="contact" name="contact" required maxlength="100"
+                       placeholder="Phone or email">
+            </div>
+            <div>
+                
+                <label for="description">Crop Description (optional)</label>
+                <textarea>
+                     id="description"
+                     name="description"
+                     rows="4"
+                     maxlength="1000"
+                     placeholder="Describe crop variety, freshness, quality, harvesting date, or other details..."
+               </textarea>
+            </div>
+
+            <div>
+                <label for="image">Crop photo (optional)</label>
+                <input id="image" name="image" type="file"
+                       accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                <p class="hint">PNG, JPG or WEBP; maximum 8 MB.</p>
+            </div>
+
+            <div class="full-width">
+                <button type="submit">Publish Crop Listing</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>🛒 Available Crop Listings</h2>
+        <p class="hint">Explore produce offered by rural farmers.</p>
+
+        {% if listings %}
+            <div class="listing-grid">
+                {% for item in listings %}
+                    <article class="listing">
+                        {% if item['image'] %}
+                            <img
+                                class="crop-image"
+                                src="{{ url_for('static', filename=item['image']) }}"
+                                alt="Photo of {{ item['crop'] }}"
+                                loading="lazy">
+                        {% else %}
+                            <div class="crop-image"
+                                 style="display:flex;align-items:center;justify-content:center;font-size:48px"
+                                 aria-label="No crop photo uploaded">🌾</div>
+                        {% endif %}
+
+                        <div class="listing-content">
+                            <h3>{{ item['crop'] }}</h3>
+
+                            <p class="price">
+                                ₹{{ "%.2f"|format(item['price']) }}
+                                / {{ item['price_unit'] or 'per kg' }}
+                            </p>
+
+                            <p><strong>Available quantity:</strong>
+                               {{ item['quantity'] }} {{ item['quantity_unit'] }}
+                            </p>
+
+                            <p><strong>Farmer:</strong>
+                                {{ item['farmer'] }}</p>
+
+                            <p><strong>Location:</strong>
+                                📍 {{ item['location'] }}</p>
+
+                            <p><strong>Contact:</strong>
+                                {{ item['contact'] }}</p>
+
+                             {% if item['description'] %}
+                            <p class="listing-description">
+                                 {{ item['description'] }}
+                            </p>
+                               {% endif %}
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>No crop listings yet. Add the first listing above!</p>
+        {% endif %}
+    </section>
+</main>
+</body>
+</html>
