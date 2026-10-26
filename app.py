@@ -9,6 +9,7 @@ import uuid
 
 from flask import Flask, redirect, render_template, render_template_string, request, url_for
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
@@ -66,6 +67,19 @@ def save_uploaded_image(file):
     return f"uploads/{unique_name}"
 
 
+def remove_uploaded_image(relative_path):
+    """Remove only a file stored inside this app's upload directory."""
+    if not relative_path:
+        return
+    filename = os.path.basename(relative_path)
+    path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        app.logger.warning("Could not remove uploaded image: %s", filename)
+
+
 def get_db():
     conn = sqlite3.connect(os.path.join(app.root_path, "gramsetu.db"))
     conn.row_factory = sqlite3.Row
@@ -107,12 +121,14 @@ def init_db():
                 "category": "TEXT NOT NULL DEFAULT 'Other'",
                 "price_unit": "TEXT NOT NULL DEFAULT 'per piece'",
                 "image": "TEXT NOT NULL DEFAULT ''",
+                "owner_pin_hash": "TEXT NOT NULL DEFAULT ''",
             },
             "listings": {
                 "quantity_unit": "TEXT NOT NULL DEFAULT 'kg'",
                 "image": "TEXT NOT NULL DEFAULT ''",
                 "price_unit": "TEXT NOT NULL DEFAULT 'per kg'",
                 "description": "TEXT NOT NULL DEFAULT ''",
+                "owner_pin_hash": "TEXT NOT NULL DEFAULT ''",
             },
         }
 
@@ -126,6 +142,39 @@ def init_db():
                     conn.execute(
                         f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
                     )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employer TEXT NOT NULL,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL,
+                wage REAL NOT NULL,
+                wage_period TEXT NOT NULL DEFAULT 'per day',
+                workers_needed INTEGER NOT NULL DEFAULT 1,
+                contact TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'Open'
+            )
+        """)
+
+        job_columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        if "owner_pin_hash" not in job_columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN owner_pin_hash TEXT NOT NULL DEFAULT ''")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS job_applications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                applicant TEXT NOT NULL,
+                skills TEXT NOT NULL DEFAULT '',
+                village TEXT NOT NULL,
+                contact TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES jobs(id)
+            )
+        """)
 
 
 init_db()
@@ -212,8 +261,161 @@ def predict_leaf_disease(image_bytes):
 HOME = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GramSetu</title>
 <style>body{font-family:Arial;background:#f4f7f0;color:#243526;margin:0}header{background:#245c3a;color:white;padding:24px 8%}main{padding:30px 8%}.card{background:white;padding:20px;border-radius:12px;margin:14px 0}a{color:#245c3a;font-weight:bold}</style></head>
 <body><header><h1>🌱 GramSetu</h1><p>Connecting rural producers to better livelihoods</p></header><main><div class="card"><h2>Growing Together, Thriving Together</h2><p>Digital tools for rural producers, farming guidance and livelihoods.</p></div>
-<div class="card"><h3>🌾 Farmer Marketplace</h3><a href="/marketplace">Explore marketplace</a></div><div class="card"><h3>🌿 Smart Agriculture</h3><a href="/farming">Open Smart Farming</a></div><div class="card"><h3>🧺 Rural Entrepreneurs</h3><a href="/products">Explore rural products</a></div></main></body></html>"""
+<div class="card"><h3>🌾 Farmer Marketplace</h3><a href="/marketplace">Explore marketplace</a></div><div class="card"><h3>🌿 Smart Agriculture</h3><a href="/farming">Open Smart Farming</a></div><div class="card"><h3>🧺 Rural Entrepreneurs</h3><a href="/products">Explore rural products</a></div><div class="card"><h3>👩‍🌾 Rural Employment</h3><p>Find local work, post job opportunities, and connect rural workers with employers.</p><a href="/employment">Explore Rural Employment</a></div></main></body></html>"""
 
+@app.route("/employment", methods=["GET", "POST"])
+def employment():
+    if request.method == "POST":
+        employer = request.form.get("employer", "").strip()
+        title = request.form.get("title", "").strip()
+        category = request.form.get("category", "").strip()
+        description = request.form.get("description", "").strip()
+        location = request.form.get("location", "").strip()
+        contact = request.form.get("contact", "").strip()
+        owner_pin = request.form.get("owner_pin", "").strip()
+        wage_period = request.form.get("wage_period", "per day").strip()
+
+        try:
+            wage = float(request.form.get("wage", "0"))
+            workers_needed = int(request.form.get("workers_needed", "1"))
+        except ValueError:
+            return "Enter a valid wage and number of workers.", 400
+
+        if not all([employer, title, category, location, contact, owner_pin]):
+            return "Please complete all required fields, including your private PIN.", 400
+        if not owner_pin.isdigit() or len(owner_pin) < 4 or len(owner_pin) > 12:
+            return "PIN must contain 4 to 12 digits.", 400
+        if wage <= 0 or workers_needed < 1:
+            return "Wage and number of workers must be positive.", 400
+        if wage_period not in ["per hour", "per day", "per week", "per month", "per task"]:
+            return "Choose a valid wage period.", 400
+
+        with get_db() as conn:
+            conn.execute(
+                """INSERT INTO jobs
+                (employer, title, category, description, location,
+                 wage, wage_period, workers_needed, contact, owner_pin_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (employer, title, category, description, location,
+                 wage, wage_period, workers_needed, contact, generate_password_hash(owner_pin)),
+            )
+        return redirect(url_for("employment"))
+
+    with get_db() as conn:
+        jobs = conn.execute(
+            "SELECT * FROM jobs ORDER BY id DESC"
+        ).fetchall()
+
+    return render_template("employment.html", jobs=jobs)
+
+
+@app.route("/employment/apply/<int:job_id>", methods=["POST"])
+def apply_for_job(job_id):
+    applicant = request.form.get("applicant", "").strip()
+    skills = request.form.get("skills", "").strip()
+    village = request.form.get("village", "").strip()
+    contact = request.form.get("contact", "").strip()
+
+    if not all([applicant, village, contact]):
+        return "Name, village and contact are required.", 400
+
+    with get_db() as conn:
+        job = conn.execute(
+            "SELECT id FROM jobs WHERE id = ? AND status = 'Open'",
+            (job_id,),
+        ).fetchone()
+
+        if job is None:
+            return "This job is no longer available.", 404
+
+        conn.execute(
+            """INSERT INTO job_applications
+            (job_id, applicant, skills, village, contact)
+            VALUES (?, ?, ?, ?, ?)""",
+            (job_id, applicant, skills, village, contact),
+        )
+
+    return redirect(url_for("employment"))
+
+
+@app.route("/employment/status/<int:job_id>", methods=["POST"])
+def update_job_status(job_id):
+    action = request.form.get("action", "").strip()
+
+    if action not in ["close", "reopen"]:
+        return "Invalid job status action.", 400
+
+    new_status = "Closed" if action == "close" else "Open"
+
+    with get_db() as conn:
+        job = conn.execute(
+            "SELECT id, owner_pin_hash FROM jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+
+        if job is None:
+            return "Job not found.", 404
+        if not job["owner_pin_hash"]:
+            return "This older job has no owner PIN. It cannot be managed with PIN verification.", 403
+        if not check_password_hash(job["owner_pin_hash"], request.form.get("owner_pin", "").strip()):
+            return "Incorrect owner PIN. No changes were made.", 403
+
+        conn.execute(
+            "UPDATE jobs SET status = ? WHERE id = ?",
+            (new_status, job_id),
+        )
+
+    return redirect(url_for("employment"))
+
+
+
+@app.route("/marketplace/delete/<int:item_id>", methods=["POST"])
+def delete_listing(item_id):
+    pin = request.form.get("owner_pin", "").strip()
+    with get_db() as conn:
+        item = conn.execute("SELECT owner_pin_hash, image FROM listings WHERE id = ?", (item_id,)).fetchone()
+        if item is None:
+            return "Listing not found.", 404
+        if not item["owner_pin_hash"]:
+            return "This older listing has no owner PIN and cannot be deleted through PIN verification.", 403
+        if not check_password_hash(item["owner_pin_hash"], pin):
+            return "Incorrect owner PIN. Listing was not deleted.", 403
+        conn.execute("DELETE FROM listings WHERE id = ?", (item_id,))
+        image_path = item["image"]
+    remove_uploaded_image(image_path)
+    return redirect(url_for("marketplace"))
+
+
+@app.route("/products/delete/<int:item_id>", methods=["POST"])
+def delete_product(item_id):
+    pin = request.form.get("owner_pin", "").strip()
+    with get_db() as conn:
+        item = conn.execute("SELECT owner_pin_hash, image FROM products WHERE id = ?", (item_id,)).fetchone()
+        if item is None:
+            return "Product not found.", 404
+        if not item["owner_pin_hash"]:
+            return "This older product has no owner PIN and cannot be deleted through PIN verification.", 403
+        if not check_password_hash(item["owner_pin_hash"], pin):
+            return "Incorrect owner PIN. Product was not deleted.", 403
+        conn.execute("DELETE FROM products WHERE id = ?", (item_id,))
+        image_path = item["image"]
+    remove_uploaded_image(image_path)
+    return redirect(url_for("products"))
+
+
+@app.route("/employment/delete/<int:job_id>", methods=["POST"])
+def delete_job(job_id):
+    pin = request.form.get("owner_pin", "").strip()
+    with get_db() as conn:
+        job = conn.execute("SELECT owner_pin_hash FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if job is None:
+            return "Job not found.", 404
+        if not job["owner_pin_hash"]:
+            return "This older job has no owner PIN and cannot be deleted through PIN verification.", 403
+        if not check_password_hash(job["owner_pin_hash"], pin):
+            return "Incorrect owner PIN. Job was not deleted.", 403
+        conn.execute("DELETE FROM job_applications WHERE job_id = ?", (job_id,))
+        conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+    return redirect(url_for("employment"))
 
 @app.route("/")
 def home():
@@ -232,10 +434,13 @@ def marketplace():
             location = request.form.get("location", "").strip()
             contact = request.form.get("contact", "").strip()
             description = request.form.get("description", "").strip()
+            owner_pin = request.form.get("owner_pin", "").strip()
             price_unit = request.form.get("price_unit", "per kg").strip()
 
-            if not all([farmer, crop, location, contact]):
-                return "Please complete all required fields.", 400
+            if not all([farmer, crop, location, contact, owner_pin]):
+                return "Please complete all required fields, including your private PIN.", 400
+            if not owner_pin.isdigit() or len(owner_pin) < 4 or len(owner_pin) > 12:
+                return "PIN must contain 4 to 12 digits.", 400
             if quantity <= 0 or price <= 0:
                 return "Quantity and price must be positive.", 400
 
@@ -259,12 +464,12 @@ def marketplace():
             conn.execute(
                 """
                 INSERT INTO listings
-                (farmer, crop, quantity, quantity_unit, price, location, contact, image, price_unit, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (farmer, crop, quantity, quantity_unit, price, location, contact, image, price_unit, description, owner_pin_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     farmer, crop, quantity, quantity_unit, price,
-                    location, contact, image_path, price_unit, description
+                    location, contact, image_path, price_unit, description, generate_password_hash(owner_pin)
                 ),
             )
         return redirect(url_for("marketplace"))
@@ -499,9 +704,12 @@ def products():
             location = request.form.get("location", "").strip()
             contact = request.form.get("contact", "").strip()
             description = request.form.get("description", "").strip()
+            owner_pin = request.form.get("owner_pin", "").strip()
 
-            if not all([seller, product, location, contact]):
-                raise ValueError("Please complete all required fields.")
+            if not all([seller, product, location, contact, owner_pin]):
+                raise ValueError("Please complete all required fields, including your private PIN.")
+            if not owner_pin.isdigit() or len(owner_pin) < 4 or len(owner_pin) > 12:
+                raise ValueError("PIN must contain 4 to 12 digits.")
             if price <= 0:
                 raise ValueError("Price must be greater than zero.")
             if category not in PRODUCT_CATEGORIES:
@@ -516,10 +724,10 @@ def products():
             conn.execute(
                 """
                 INSERT INTO products
-                (seller, product, price, location, contact, description, category, price_unit, image)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (seller, product, price, location, contact, description, category, price_unit, image, owner_pin_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (seller, product, price, location, contact, description, category, price_unit, image_path),
+                (seller, product, price, location, contact, description, category, price_unit, image_path, generate_password_hash(owner_pin)),
             )
         return redirect(url_for("products"))
 
